@@ -160,3 +160,130 @@ La precisión mide cuántas decisiones coinciden con las etiquetas de un conjunt
 5. **El juego es secuencial.** La red decide cuadro por cuadro, solo cuando Neurito está en el suelo. Un salto un poco antes o después no se corrige en el aire, y el error se acumula.
 
 **En una frase:** una precisión alta indica que la red aprendió bien la regla de las etiquetas, pero no garantiza que esa regla sea buena para esquivar obstáculos con la física del juego.
+
+---
+
+## Neurito 3.0: laberinto
+
+Neurito busca comida en tres laberintos eligiendo entre ARRIBA, ABAJO, IZQUIERDA y DERECHA. La red 165 → 96 → 4 está hecha con NumPy y Pygame dibuja el laberinto, las probabilidades y la gráfica de pérdida.
+
+- **Aprendizaje supervisado por imitación** (no es aprendizaje por refuerzo): BFS actúa como profesor y genera las etiquetas.
+- **Entradas (165):** mapa (3, one-hot) + posición (81, one-hot) + comida (81, one-hot).
+- **Arquitectura:** 96 neuronas ocultas con ReLU y 4 salidas con Softmax.
+- **Entrenamiento:** entropía cruzada multiclase, retropropagación y mini-lotes de 256 con tasa 0.45.
+- **Datos:** 80 % entrenamiento y 20 % prueba; los pares posición-meta de prueba nunca se entrenan.
+- Al jugar, la red decide **sin consultar BFS**.
+
+### Dos modos
+
+| Modo | Qué hace |
+|---|---|
+| **Red pura** | Toma la acción con mayor probabilidad. Puede chocar con paredes o dar vueltas. |
+| **Asistido** | Descarta movimientos contra paredes y penaliza casillas visitadas. Son reglas extra, no lo aprendió la red. |
+
+La exactitud de clasificación (acertar la acción en un paso) no es lo mismo que el porcentaje de laberintos completados.
+
+### Archivos del laberinto
+
+| Archivo | Función |
+|---|---|
+| `laberinto_mundo.py` | Mapas, movimiento, BFS y navegación asistida |
+| `laberinto_red.py` | Red neuronal y entrenamiento con NumPy |
+| `laberinto.py` | Juego Pygame, sprites y gráfica de pérdida |
+| `test_laberinto.py` | Pruebas automáticas |
+| `GUIA_LABERINTO.md` | Guía completa y experimentos |
+
+Guía completa: [GUIA_LABERINTO.md](neurito/GUIA_LABERINTO.md)
+
+Reutiliza `assets/neutral_1.png`, `neutral_2.png` y `neutral_3.png`.
+
+### Ejecutar el laberinto
+
+En la carpeta donde está `pyproject.toml`:
+
+```bash
+uv sync
+uv run laberinto.py
+```
+
+Pruebas automáticas (las 5 pasan):
+
+```bash
+uv run python -m unittest -v test_laberinto.py
+```
+
+### Controles del laberinto
+
+| Tecla | Función |
+|---|---|
+| `1` | Entrenar una época |
+| `2` | Entrenar cien épocas |
+| `3` | Activar o pausar entrenamiento continuo |
+| `A` | Alternar red pura y asistida |
+| `P` | Alternar navegación automática y paso a paso |
+| `Espacio` | Avanzar un paso en modo manual |
+| `N` | Cambiar de mapa |
+| `G` | Nuevas posiciones y meta |
+| `C` | Reiniciar contadores |
+| `R` | Reiniciar pesos y entrenamiento |
+| `Esc` | Salir |
+
+### Resultados de los experimentos del laberinto
+
+Todos con semilla 42 y evaluados sobre los 716 retos de prueba (no entrenados). "Éxito" significa llegar a la comida dentro del límite de pasos. Es una sola corrida por configuración; los valores pueden variar con otra semilla.
+
+**1. Neurito sin entrenar.** Con 0 épocas acierta la acción el 27.7 % de las veces y llega a la comida el 3.1 % (red pura). Se atasca porque sus pesos aleatorios no tienen información del laberinto: choca con paredes y repite acciones.
+
+**2. Épocas de entrenamiento** (96 neuronas, tasa 0.45):
+
+| Épocas | Pérdida | Exactitud prueba | Éxito red pura | Éxito asistido |
+|---|---|---|---|---|
+| 0 | — | 27.7 % | 3.1 % | 57.5 % |
+| 100 | 0.1352 | 84.9 % | 51.3 % | 97.9 % |
+| 200 | 0.0376 | 90.1 % | 81.3 % | 98.9 % |
+| 400 | 0.0107 | 91.5 % | 82.7 % | 99.6 % |
+
+La pérdida baja rápido al inicio y luego se aplana: de 200 a 400 épocas la mejora es pequeña.
+
+**3. Red pura frente a asistida.** Con 400 épocas, la red pura completa el 82.7 % y la asistida el 99.6 %. La red aporta la dirección general hacia la comida; las reglas corrigen choques y ciclos. Incluso sin entrenar, la asistencia llega a 57.5 %, así que parte del éxito es de las reglas y no del modelo.
+
+**4. Neuronas ocultas** (400 épocas, tasa 0.45):
+
+| Neuronas | Pérdida | Exactitud prueba | Éxito pura | Éxito asistido |
+|---|---|---|---|---|
+| 16 | 0.0342 | 87.2 % | 74.3 % | 99.0 % |
+| 32 | 0.0161 | 89.3 % | 78.4 % | 98.3 % |
+| 96 | 0.0107 | 91.5 % | 82.7 % | 99.6 % |
+| 128 | 0.0103 | 90.8 % | 85.3 % | 98.7 % |
+
+Más neuronas bajan la pérdida y ayudan a la red pura, pero de 96 a 128 la mejora es marginal y la exactitud de prueba no sube.
+
+**5. Tasa de aprendizaje** (400 épocas, 96 neuronas):
+
+| Tasa | Pérdida | Exactitud prueba | Éxito pura | Éxito asistido |
+|---|---|---|---|---|
+| 0.01 | 0.6818 | 73.9 % | 20.4 % | 87.6 % |
+| 0.1 | 0.1490 | 87.2 % | 60.2 % | 98.9 % |
+| 0.45 | 0.0107 | 91.5 % | 82.7 % | 99.6 % |
+| 1.0 | 0.0028 | 93.3 % | 85.5 % | 99.3 % |
+| 2.0 | 0.0011 | 93.3 % | 85.6 % | 99.2 % |
+
+Con tasas bajas aprende muy lento. Con 0.45, 1.0 y 2.0 converge sin inestabilidad en este problema.
+
+**6. Cambiar de mapa.** Los tres mapas forman parte del entrenamiento (la red recibe su identificador), así que funciona en todos. Lo que no se entrenó son las combinaciones de inicio y meta de la prueba.
+
+**7. Cambiar el experto: DFS, BFS y A\*.** Se reentrenó la misma red (400 épocas) con etiquetas de cada algoritmo:
+
+| Experto | Largo medio del camino | Pérdida | Exactitud prueba | Éxito pura | Éxito asistido |
+|---|---|---|---|---|---|
+| DFS | 10.79 pasos | 0.0112 | 93.4 % | 13.8 % | 42.5 % |
+| BFS | 6.02 pasos | 0.0107 | 91.5 % | 82.7 % | 99.6 % |
+| A* (Manhattan) | 6.02 pasos | 0.0110 | 92.6 % | 86.3 % | 99.4 % |
+
+- **DFS empeora mucho a Neurito:** sus caminos no son los más cortos y dependen del orden de exploración. La red los imita bien (93.4 % de exactitud), pero esas rutas largas la hacen pasarse del límite de pasos.
+- **BFS y A\*** dan caminos óptimos de igual longitud y Neurito rinde parecido con ambos; la pequeña diferencia viene del desempate entre rutas igual de cortas.
+- La calidad del experto importa más que la exactitud: una red puede imitar perfectamente a un mal profesor y aun así fallar la tarea.
+
+### Alcance y limitaciones
+
+El modelo no interpreta imágenes: usa características estructuradas y conoce el identificador de cada mapa. La evaluación demuestra generalización a pares posición-meta no entrenados, **no** a laberintos totalmente desconocidos; para eso habría que representar las paredes de cualquier mapa nuevo y entrenar y evaluar en mapas separados.
