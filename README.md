@@ -148,3 +148,14 @@ No se necesitan dependencias nuevas: se reutilizan NumPy y Pygame.
 | `Esc` | Salir |
 
 **Pregunta central:** ¿por qué una red puede clasificar ejemplos con buena precisión y aun así chocar?
+Respuesta:
+
+La precisión mide cuántas decisiones coinciden con las etiquetas de un conjunto de ejemplos, no si Neurito sobrevive en el juego. Hay varias razones por las que la red puede acertar mucho y aun así chocar:
+
+Las etiquetas son una regla que definimos nosotros. Marcamos "saltar" cuando el tiempo estimado hasta el obstáculo está entre 7 y 13 fotogramas. La red aprende bien esa regla, pero no hay garantía de que esa ventana coincida con la física real del salto.
+La física del salto es independiente de la red. La gravedad, el impulso, la altura del salto y el tamaño del obstáculo deciden si Neurito pasa. Una decisión "correcta" según la etiqueta puede quedar muy temprano o muy tarde para librar el obstáculo.
+Los ejemplos de entrenamiento son sintéticos. La prueba usa datos de la misma fuente, así que mide qué tan bien reproduce la regla artificial, no cómo se comporta en situaciones nuevas del juego.
+Los errores cerca del límite pesan más. Un 95% de aciertos puede esconder los fallos justo en los casos críticos, como cuando el tiempo estimado está cerca de 7 o de 13 fotogramas, y un solo error ahí produce un choque.
+El juego es secuencial. La red decide cuadro por cuadro, solo cuando Neurito está en el suelo. Un salto un poco antes o después no se corrige en el aire, y el error se acumula.
+
+En una frase: una precisión alta indica que la red aprendió bien la regla de las etiquetas, pero no garantiza que esa regla sea buena para esquivar obstáculos con la física del juego.
